@@ -1,0 +1,440 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="initial-scale=1,user-scalable=no,maximum-scale=1,width=device-width">
+        <meta name="mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-capable" content="yes">
+        <title>Solapur Sustainable Urban Dashboard</title>
+        
+        <!-- Original QGIS CSS -->
+        <link rel="stylesheet" href="css/leaflet.css">
+        <link rel="stylesheet" href="css/qgis2web.css">
+        <link rel="stylesheet" href="css/fontawesome-all.min.css">
+        
+        <!-- Google Fonts -->
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+        
+        <!-- Chart.js -->
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+
+        <style>
+            /* Global Variables */
+            :root {
+                /* Map Theme Variables */
+                --slate-900: #0f172a; --slate-800: #1e293b; --slate-700: #334155; 
+                --slate-100: #f1f5f9; --blue-500: #3b82f6; --emerald-500: #10b981;
+                
+                /* Analytics Theme Variables (Dark Mode Default) */
+                --bg:#141820; --card:#1d2330; --ink:#eceff5; --mute:#98a1b5; 
+                --line:#2f3748; --acc:#8fb0ff; --warm:#f09560; --ok:#5fcf9d; --warn:#e8b552;
+            }
+
+            body, html {
+                margin: 0; padding: 0; width: 100%; height: 100%; font-family: 'Inter', sans-serif;
+                background-color: var(--slate-100); overflow: hidden;
+            }
+
+            /* Main Website Header */
+            .top-header {
+                background-color: var(--slate-900); color: white; height: 60px; display: flex;
+                align-items: center; justify-content: space-between; padding: 0 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.3); z-index: 2000; position: relative;
+            }
+            .header-title { font-size: 1.1rem; font-weight: 600; display: flex; align-items: center; gap: 10px; }
+            .header-title i { color: var(--blue-500); }
+            
+            /* Tabs Navigation */
+            .top-tabs {
+                display: flex; gap: 10px; height: 100%; align-items: flex-end;
+            }
+            .tab-btn {
+                background: transparent; border: none; color: #cbd5e1; font-family: inherit; font-size: 0.95rem; font-weight: 500;
+                padding: 0 16px 12px 16px; cursor: pointer; transition: all 0.2s; border-bottom: 3px solid transparent;
+            }
+            .tab-btn:hover { color: white; }
+            .tab-btn.active { color: white; border-bottom: 3px solid var(--blue-500); }
+
+            .header-stats { display: flex; gap: 20px; font-size: 0.9rem; align-items: center; }
+            .stat-badge { background: var(--slate-800); padding: 6px 12px; border-radius: 20px; border: 1px solid var(--slate-700); }
+            .status-indicator { display: inline-block; width: 8px; height: 8px; background: var(--emerald-500); border-radius: 50%; margin-right: 6px; box-shadow: 0 0 8px var(--emerald-500); }
+
+            /* Tab Content Containers */
+            .tab-content { display: none; height: calc(100vh - 60px); width: 100%; }
+            .tab-content.active { display: flex; }
+
+            /* =========================================
+               MAP SECTION STYLES
+               ========================================= */
+            .sidebar {
+                width: 320px; background: white; border-right: 1px solid #e2e8f0; display: flex; flex-direction: column; overflow-y: auto; z-index: 999;
+            }
+            .sidebar-header { padding: 16px; background: var(--slate-100); border-bottom: 1px solid #e2e8f0; font-weight: 600; color: var(--slate-800); }
+            .layer-group { padding: 0; margin: 0; list-style: none; }
+            .layer-group-title { padding: 12px 16px; background: #f8fafc; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--slate-700); border-bottom: 1px solid #e2e8f0; border-top: 1px solid #e2e8f0; font-weight: 600;}
+            .layer-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid #f1f5f9; transition: background 0.2s; }
+            .layer-item:hover { background: #f8fafc; }
+            .layer-name { font-size: 0.9rem; color: var(--slate-800); }
+            #map { flex: 1; width: 100%; height: 100%; background: #e2e8f0; }
+
+            /* Custom Toggle Switch */
+            .switch { position: relative; display: inline-block; width: 36px; height: 20px; }
+            .switch input { opacity: 0; width: 0; height: 0; }
+            .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #cbd5e1; transition: .3s; border-radius: 34px; }
+            .slider:before { position: absolute; content: ""; height: 14px; width: 14px; left: 3px; bottom: 3px; background-color: white; transition: .3s; border-radius: 50%; box-shadow: 0 1px 2px rgba(0,0,0,0.2); }
+            input:checked + .slider { background-color: var(--blue-500); }
+            input:checked + .slider:before { transform: translateX(16px); }
+
+            /* Popups */
+            .leaflet-popup-content-wrapper { border-radius: 8px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); padding: 0; overflow: hidden; }
+            .leaflet-popup-content { margin: 0; width: 280px !important; }
+            .leaflet-popup-content table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+            .leaflet-popup-content tr:nth-child(even) { background-color: #f8fafc; }
+            .leaflet-popup-content td { padding: 8px 12px; border-bottom: 1px solid #e2e8f0; color: var(--slate-700); }
+            .leaflet-popup-content td:first-child { font-weight: 600; width: 40%; color: var(--slate-900); background: #f1f5f9; }
+
+            /* =========================================
+               ANALYTICS SECTION STYLES (Charts/UHI/Plan)
+               ========================================= */
+            .analytics-wrapper {
+                background: var(--bg); color: var(--ink); width: 100%; overflow-y: auto; padding: 24px;
+            }
+            .analytics-main { max-width: 1100px; margin: 0 auto; }
+            .analytics-main h1 { font: 600 28px/1.2 Georgia, "Times New Roman", serif; margin: 8px 0 6px; }
+            .analytics-main .sub { color: var(--mute); margin: 0 0 24px; font-size: 1.05rem; }
+            .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 14px; margin-bottom: 18px; }
+            .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+            .k { font-size: 14px; color: var(--mute); margin-bottom: 6px;}
+            .v { font: 600 26px/1.2 Georgia, serif; color: var(--ink); }
+            .u { font-size: 13px; color: var(--mute); margin-top: 4px; }
+            .tag { display: inline-block; font-size: 12px; padding: 3px 10px; border-radius: 12px; margin-top: 8px; background: var(--line); font-weight: 500; }
+            .ok { color: var(--ok); background: rgba(47, 125, 91, 0.15); }
+            .warn { color: var(--warn); background: rgba(183, 121, 31, 0.15); }
+            .charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px; margin-bottom: 18px; }
+            .cv { height: 240px; position: relative; width: 100%; }
+            .wide { overflow-x: auto; }
+            .analytics-main table { border-collapse: collapse; width: 100%; min-width: 620px; font-size: 14px; }
+            .analytics-main th, .analytics-main td { padding: 10px 12px; border-bottom: 1px solid var(--line); text-align: right; }
+            .analytics-main th:first-child, .analytics-main td:first-child { text-align: left; }
+            .analytics-main h2 { font: 600 20px Georgia, serif; margin: 24px 0 12px; color: var(--ink); }
+            .note { color: var(--mute); font-size: 14px; line-height: 1.6; margin-top: 10px; }
+            .planning-text p { font-size: 15px; line-height: 1.7; color: var(--ink); margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid var(--line); }
+            .planning-text p:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+            .planning-text b { color: var(--acc); font-size: 16px; display: block; margin-bottom: 4px; }
+
+            /* Responsive */
+            @media (max-width: 768px) {
+                .tab-content { flex-direction: column; }
+                .sidebar { width: 100%; height: 40%; border-right: none; border-bottom: 2px solid var(--slate-800); }
+                .top-tabs { overflow-x: auto; padding-bottom: 0; }
+                .tab-btn { white-space: nowrap; padding: 0 10px 12px 10px; }
+            }
+        </style>
+    </head>
+    <body>
+        
+        <!-- Main Website Header -->
+        <header class="top-header">
+            <div class="header-title">
+                <i class="fas fa-city"></i> Solapur Sustainable Urban Dashboard
+            </div>
+            
+            <!-- Global Navigation Tabs -->
+            <nav class="top-tabs">
+                <button class="tab-btn active" data-target="map-section">Map Explorer</button>
+                <button class="tab-btn" data-target="air-section">Air Quality</button>
+                <button class="tab-btn" data-target="uhi-section">UHI Analytics</button>
+                <button class="tab-btn" data-target="plan-section">Planning Actions</button>
+            </nav>
+
+            <div class="header-stats">
+                <div class="stat-badge"><span class="status-indicator"></span>System Online</div>
+            </div>
+        </header>
+
+        <!-- TAB 1: MAP EXPLORER -->
+        <div id="map-section" class="tab-content active">
+            <aside class="sidebar">
+                <div class="sidebar-header">Layer Catalog</div>
+                <div id="layer-tree"></div>
+            </aside>
+            <div id="map"></div>
+        </div>
+
+        <!-- TAB 2: AIR QUALITY ANALYTICS -->
+        <div id="air-section" class="tab-content analytics-wrapper">
+            <div class="analytics-main">
+                <h1>Air Quality Dashboard</h1>
+                <p class="sub">Sentinel-5P TROPOMI, May 2025 Data Analysis</p>
+                
+                <div class="grid" id="cards"></div>
+                <div class="charts">
+                    <div class="card"><div class="k">Variability (std ÷ mean, %) by gas</div><div class="cv"><canvas id="cvc"></canvas></div></div>
+                    <div class="card"><div class="k">NO₂ and SO₂ min / mean / max (µmol/m²)</div><div class="cv"><canvas id="nso"></canvas></div></div>
+                    <div class="card"><div class="k">CO min / mean / max (mol/m²)</div><div class="cv"><canvas id="coc"></canvas></div></div>
+                    <div class="card"><div class="k">CH₄ min / mean / max (ppb)</div><div class="cv"><canvas id="ch4c"></canvas></div></div>
+                </div>
+                <h2>Full statistics, May 2025</h2>
+                <div class="card wide"><table id="tbl"></table></div>
+                <p class="note">These are satellite column densities for the whole column of air, not ground-level AQI. Use them for relative comparison across months and locations. SO₂ min is negative because values near the detection limit carry noise. The sample counts (11 for CH₄, 29 for the others) are small.</p>
+            </div>
+        </div>
+
+        <!-- TAB 3: URBAN HEAT ISLAND (UHI) -->
+        <div id="uhi-section" class="tab-content analytics-wrapper">
+            <div class="analytics-main">
+                <h1>Urban Heat Island (UHI) Analytics</h1>
+                <p class="sub">Pixel histogram of UHI band values relative to city average</p>
+                
+                <div class="grid">
+                    <div class="card"><div class="k">Mean UHI value</div><div class="v">-0.06</div><div class="u">°C relative to city average</div></div>
+                    <div class="card"><div class="k">Median / most common</div><div class="v">0.5 / 2.1</div><div class="u">°C</div></div>
+                    <div class="card"><div class="k">Spread (std dev)</div><div class="v">3.94</div><div class="u">°C</div></div>
+                    <div class="card"><div class="k">Range</div><div class="v">-18.3 to 9.6</div><div class="u">5th–95th: -6.5 to 5.1</div></div>
+                    <div class="card"><div class="k">Pixels at +2 °C or more</div><div class="v warn">33.7%</div><div class="u">hot or very hot</div></div>
+                    <div class="card"><div class="k">Pixels at +5 °C or more</div><div class="v warn">6.0%</div><div class="u">very hot</div></div>
+                </div>
+                <div class="charts">
+                    <div class="card"><div class="k">Share of pixels by 1 °C UHI bin (%)</div><div class="cv"><canvas id="hist"></canvas></div></div>
+                    <div class="card"><div class="k">UHI class share (%)</div><div class="cv"><canvas id="cls"></canvas></div></div>
+                </div>
+                <h2>UHI classes distribution</h2>
+                <div class="card wide">
+                    <table>
+                        <tr><th>Class</th><th>UHI value (°C)</th><th>Pixels (%)</th></tr>
+                        <tr><td>Cool</td><td>below -2</td><td>26.2</td></tr>
+                        <tr><td>Neutral</td><td>-2 to 0</td><td>18.0</td></tr>
+                        <tr><td>Warm</td><td>0 to 2</td><td>22.2</td></tr>
+                        <tr><td>Hot</td><td>2 to 5</td><td>27.7</td></tr>
+                        <tr><td>Very hot</td><td>5 and above</td><td>6.0</td></tr>
+                    </table>
+                </div>
+                <p class="note">Built from about 995,000 pixels in the file ee-chart (32). The class cut-offs (-2, 0, 2, 5) are defined based on variance.</p>
+            </div>
+        </div>
+
+        <!-- TAB 4: PLANNING ACTIONS -->
+        <div id="plan-section" class="tab-content analytics-wrapper">
+            <div class="analytics-main">
+                <h1>Strategic Planning Actions</h1>
+                <p class="sub">Recommendations derived from Solapur's heat and air quality data integrations.</p>
+                
+                <div class="card planning-text">
+                    <p><b>1. Cool the hot zones first.</b> A third of the city (33.7%) is 2 °C or more above average, and 6% is 5 °C or more. Start with those pixels: add tree cover, shaded streets and cool or reflective roofs. Map them to wards to set priority.</p>
+                    <p><b>2. Protect the cool areas.</b> About 26% of pixels are 2 °C or more below average (water, vegetation). Keep them as green and blue corridors and stop them being built over.</p>
+                    <p><b>3. Keep air quality as is.</b> NO₂, CO, O₃ and CH₄ are at normal or background levels in May 2025. Plan transit, walking and cycling now so traffic does not push NO₂ up as the city grows.</p>
+                    <p><b>4. Check SO₂ at source.</b> SO₂ is noisy (std is about 145% of the mean), so look at industrial clusters and power sources with finer data before setting rules.</p>
+                    <p><b>5. Heat and air interact.</b> Hot, still air raises ozone formation. Cooling hot zones helps air quality too, so plan green cover where heat and traffic overlap.</p>
+                    <p><b>6. Monitor Continuously.</b> Repeat both analyses every season and by ward, then compare the share of pixels at +2 °C or more. A falling share shows the plan is working.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Map Vector Scripts -->
+        <script src="js/qgis2web_expressions.js"></script>
+        <script src="js/leaflet.js"></script>
+        <script src="js/leaflet.rotatedMarker.js"></script>
+        <script src="js/leaflet.pattern.js"></script>
+        <script src="js/leaflet-hash.js"></script>
+        <script src="js/Autolinker.min.js"></script>
+        <script src="js/rbush.min.js"></script>
+        <script src="js/labelgun.min.js"></script>
+        <script src="js/labels.js"></script>
+        <script src="data/water_line_22.js"></script>
+        <script src="data/landuse_23.js"></script>
+        <script src="data/railway_24.js"></script>
+        <script src="data/road_25.js"></script>
+        <script src="data/water_poly_26.js"></script>
+        <script src="data/solapur_wards_2026_27.js"></script>
+        <script src="data/villagessolapur_villages_28.js"></script>
+        <script src="data/buffer8output_2__export_output_2_29.js"></script>
+
+        <script>
+        /* =========================================
+           TAB SWITCHING LOGIC
+           ========================================= */
+        const tabs = document.querySelectorAll('.tab-btn');
+        const sections = document.querySelectorAll('.tab-content');
+
+        tabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                tabs.forEach(t => t.classList.remove('active'));
+                sections.forEach(s => s.classList.remove('active'));
+                
+                tab.classList.add('active');
+                const targetId = tab.getAttribute('data-target');
+                document.getElementById(targetId).classList.add('active');
+                
+                // IMPORTANT: Fix Leaflet gray tile bug when unhiding container
+                if (targetId === 'map-section' && typeof map !== 'undefined') {
+                    setTimeout(() => map.invalidateSize(), 100);
+                }
+            });
+        });
+
+        /* =========================================
+           LEAFLET MAP LOGIC
+           ========================================= */
+        var map = L.map('map', {
+            zoomControl: false, maxZoom: 28, minZoom: 1
+        }).fitBounds([[17.362616493375416,75.54374234299611],[17.96445291622623,76.25391530744115]]);
+        var hash = new L.Hash(map);
+        map.attributionControl.setPrefix('<a href="https://leafletjs.com">Leaflet</a> &middot; Dashboard');
+        L.control.zoom({ position: 'topright' }).addTo(map);
+
+        var autolinker = new Autolinker({truncate: {length: 30, location: 'smart'}});
+
+        // Base Maps Setup
+        map.createPane('pane_GoogleSatellite_0');
+        map.getPane('pane_GoogleSatellite_0').style.zIndex = 400;
+        var layer_GoogleSatellite_0 = L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
+            pane: 'pane_GoogleSatellite_0', opacity: 1.0, maxZoom: 28
+        });
+
+        map.createPane('pane_ESRIGraylight_1');
+        map.getPane('pane_ESRIGraylight_1').style.zIndex = 401;
+        var layer_ESRIGraylight_1 = L.tileLayer('https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+            pane: 'pane_ESRIGraylight_1', opacity: 1.0, maxZoom: 28
+        });
+
+        // Raster Helper
+        function createRaster(paneName, zIndex, imgSrc, bounds) {
+            map.createPane(paneName);
+            map.getPane(paneName).style.zIndex = zIndex;
+            return new L.imageOverlay(imgSrc, bounds, {pane: paneName});
+        }
+        var boundsA = [[17.48121542896589,75.71001214559327],[17.85850784829609,76.08730456492347]];
+        var boundsB = [[17.506907246,75.736332783],[17.804429268,76.040322676]];
+
+        var layer_SO2 = createRaster('pane_SO2', 402, 'data/SO2_Sulphur_Dioxide_May_2025_2.png', boundsA);
+        var layer_CO = createRaster('pane_CO', 403, 'data/CO_Carbon_Monoxide_May_2025_3.png', boundsA);
+        var layer_NO2 = createRaster('pane_NO2', 404, 'data/NO2_Nitrogen_Dioxide_May_2025_4.png', boundsA);
+        var layer_O3 = createRaster('pane_O3', 405, 'data/O3_Ozone_Total_Column_May_2025_5.png', boundsA);
+        var layer_day_uhi = createRaster('pane_day', 406, 'data/day_uhi_2025_6.png', boundsB);
+        var layer_night_uhi = createRaster('pane_night', 407, 'data/night_uhi_2025_7.png', [[17.499181735,75.727978451],[17.804608931,76.042388801]]);
+        var layer_albedo_win = createRaster('pane_aw', 408, 'data/Surface_Albedo_Winter_2025_8.png', boundsB);
+        var layer_albedo_sum = createRaster('pane_as', 409, 'data/Surface_Albedo_Summer_2025_9.png', boundsB);
+        var layer_emiss_win = createRaster('pane_ew', 410, 'data/Surface_Emissivity_Winter_2025_10.png', boundsB);
+        var layer_emiss_sum = createRaster('pane_es', 411, 'data/Surface_Emissivity_Summer_2025_11.png', boundsB);
+        var layer_utfvi_win = createRaster('pane_uw', 412, 'data/UTFVI_Winter_2025_12.png', boundsB);
+        var layer_utfvi_sum = createRaster('pane_us', 413, 'data/UTFVI_Summer_2025_13.png', boundsB);
+        var layer_savi_win = createRaster('pane_sw', 414, 'data/SAVI_Winter_2025_14.png', boundsB);
+        var layer_savi_sum = createRaster('pane_ss', 415, 'data/SAVI_AprMay_2025_15.png', boundsB);
+        var layer_ndwi_win = createRaster('pane_nw', 416, 'data/NDWI_Winter_2025_16.png', boundsB);
+        var layer_ndwi_sum = createRaster('pane_ns', 417, 'data/NDWI_Summer_2025_17.png', boundsB);
+        var layer_ndvi_sum = createRaster('pane_vs', 418, 'data/NDVI_summer_2025_18.png', boundsB);
+        var layer_ndvi_win = createRaster('pane_vw', 419, 'data/NDVI_winter_2025_19.png', boundsB);
+        var layer_ndbi_win = createRaster('pane_bw', 420, 'data/NDBI_winter_2025_20.png', boundsB);
+        var layer_ndbi_sum = createRaster('pane_bs', 421, 'data/NDBI_summer_2025_21.png', boundsB);
+
+        // Vector Helper
+        function createVector(paneName, zIndex, data, styleFunc) {
+            map.createPane(paneName); map.getPane(paneName).style.zIndex = zIndex;
+            return new L.geoJson(data, {
+                interactive: true, pane: paneName, style: styleFunc,
+                onEachFeature: function(f, l) {
+                    var html = '<table>';
+                    for (var k in f.properties) {
+                        var v = f.properties[k];
+                        if (v !== null && v !== '') html += '<tr><td>'+k+'</td><td>'+autolinker.link(String(v))+'</td></tr>';
+                    }
+                    l.bindPopup(html+'</table>', { maxHeight: 350 });
+                }
+            });
+        }
+
+        var layer_water_line = createVector('pane_wl', 422, json_water_line_22, () => ({ color: '#1f78b4', weight: 1.5 }));
+        var layer_landuse = createVector('pane_lu', 423, json_landuse_23, () => ({ color: '#333', weight: 1, fillColor: '#fdbf6f', fillOpacity: 0.6 }));
+        var layer_railway = createVector('pane_rw', 424, json_railway_24, () => ({ color: '#703622', weight: 1.5, dashArray: '5,5' }));
+        var layer_road = createVector('pane_rd', 425, json_road_25, () => ({ color: '#e31a1c', weight: 1.5 }));
+        var layer_water_poly = createVector('pane_wp', 426, json_water_poly_26, () => ({ color: '#333', weight: 1, fillColor: '#89eded', fillOpacity: 0.7 }));
+        var layer_wards = createVector('pane_wd', 427, json_solapur_wards_2026_27, () => ({ color: '#000', weight: 2, fillOpacity: 0 }));
+        var layer_villages = createVector('pane_vi', 428, json_villagessolapur_villages_28, () => ({ color: '#333', weight: 1, fillOpacity: 0 }));
+        var layer_buffer = createVector('pane_bf', 429, json_buffer8output_2__export_output_2_29, () => ({ color: '#333', weight: 1, fillColor: '#e5b636', fillOpacity: 0.3 }));
+
+        // Default Layers (from previous requirement)
+        map.addLayer(layer_ESRIGraylight_1);
+        map.addLayer(layer_villages);
+
+        // Sidebar Tree
+        const customLayerTree = [
+            { group: "Base Maps", type: "radio", layers: [{ name: "Google Satellite", layer: layer_GoogleSatellite_0, active: false }, { name: "ESRI Gray (Light)", layer: layer_ESRIGraylight_1, active: true }] },
+            { group: "Administrative Boundaries", type: "checkbox", layers: [{ name: "Solapur Wards 2026", layer: layer_wards, active: false }, { name: "Solapur Villages", layer: layer_villages, active: true }, { name: "Buffer Zones Output", layer: layer_buffer, active: false }] },
+            { group: "Infrastructure & Land", type: "checkbox", layers: [{ name: "Road Network", layer: layer_road, active: false }, { name: "Railway Lines", layer: layer_railway, active: false }, { name: "Water Lines", layer: layer_water_line, active: false }, { name: "Water Bodies (Poly)", layer: layer_water_poly, active: false }, { name: "Landuse Classification", layer: layer_landuse, active: false }] },
+            { group: "Environmental Analytics (2025)", type: "checkbox", layers: [{ name: "NDVI Summer", layer: layer_ndvi_sum, active: false }, { name: "NDVI Winter", layer: layer_ndvi_win, active: false }, { name: "NDWI Summer", layer: layer_ndwi_sum, active: false }, { name: "NDWI Winter", layer: layer_ndwi_win, active: false }, { name: "NDBI Summer", layer: layer_ndbi_sum, active: false }, { name: "NDBI Winter", layer: layer_ndbi_win, active: false }, { name: "SAVI Summer", layer: layer_savi_sum, active: false }, { name: "SAVI Winter", layer: layer_savi_win, active: false }, { name: "UTFVI Summer", layer: layer_utfvi_sum, active: false }, { name: "UTFVI Winter", layer: layer_utfvi_win, active: false }] },
+            { group: "Climate & Air Quality (2025)", type: "checkbox", layers: [{ name: "UHI Day", layer: layer_day_uhi, active: false }, { name: "UHI Night", layer: layer_night_uhi, active: false }, { name: "Surface Albedo Summer", layer: layer_albedo_sum, active: false }, { name: "Surface Albedo Winter", layer: layer_albedo_win, active: false }, { name: "Surface Emissivity Summer", layer: layer_emiss_sum, active: false }, { name: "Surface Emissivity Winter", layer: layer_emiss_win, active: false }, { name: "SO2 Sulphur Dioxide", layer: layer_SO2, active: false }, { name: "NO2 Nitrogen Dioxide", layer: layer_NO2, active: false }, { name: "CO Carbon Monoxide", layer: layer_CO, active: false }, { name: "O3 Ozone Total Column", layer: layer_O3, active: false }] }
+        ];
+
+        const treeContainer = document.getElementById('layer-tree');
+        customLayerTree.forEach((group) => {
+            const groupDiv = document.createElement('div'); groupDiv.className = 'layer-group-title'; groupDiv.innerText = group.group;
+            treeContainer.appendChild(groupDiv);
+            const ul = document.createElement('div'); ul.className = 'layer-group';
+            group.layers.forEach((item) => {
+                const li = document.createElement('div'); li.className = 'layer-item';
+                const label = document.createElement('span'); label.className = 'layer-name'; label.innerText = item.name;
+                const toggle = document.createElement('label'); toggle.className = 'switch';
+                const input = document.createElement('input'); input.type = group.type; 
+                if(group.type === 'radio') input.name = 'basemap'; 
+                input.checked = item.active;
+                input.addEventListener('change', (e) => {
+                    if (group.type === 'radio') { group.layers.forEach(l => map.removeLayer(l.layer)); if (e.target.checked) map.addLayer(item.layer); }
+                    else { if (e.target.checked) map.addLayer(item.layer); else map.removeLayer(item.layer); }
+                });
+                const slider = document.createElement('span'); slider.className = 'slider';
+                toggle.appendChild(input); toggle.appendChild(slider); li.appendChild(label); li.appendChild(toggle); ul.appendChild(li);
+            });
+            treeContainer.appendChild(ul);
+        });
+
+        /* =========================================
+           CHART.JS DATA INJECTION
+           ========================================= */
+        var D=[["CH₄ Methane","ppb",437,11,1925.119866,1930.076401,1930.244825,1935.314137,2.909034,1],
+        ["NO₂ Nitrogen dioxide","mol/m²",438,29,0.000030,0.000035,0.000034,0.000054,0.000005,1e6],
+        ["SO₂ Sulphur dioxide","mol/m²",438,29,-0.000031,0.000020,0.000023,0.000066,0.000029,1e6],
+        ["CO Carbon monoxide","mol/m²",439,29,0.034554,0.035642,0.035611,0.036441,0.000409,1],
+        ["O₃ Ozone total column","mol/m²",438,29,0.128335,0.128708,0.128719,0.129055,0.000145,1]];
+        
+        var notes=["Near global background","Low, steady","Noisy, near detection limit","Typical background","Normal (about 288 DU)"];
+        var cls=["ok","ok","warn","ok","ok"];
+        
+        // Render Top Info Cards
+        document.getElementById("cards").innerHTML=D.map(function(g,i){
+            var val=(i==1||i==2)?(g[5]*1e6).toFixed(1):(i==0?g[5].toFixed(1):g[5].toFixed(4));
+            var u=(i==1||i==2)?"µmol/m²":g[1];
+            return '<div class="card"><div class="k">'+g[0]+'</div><div class="v">'+val+'</div><div class="u">mean · '+u+'</div><span class="tag '+cls[i]+'">'+notes[i]+'</span></div>'
+        }).join("");
+        
+        // Render Statistics Table
+        document.getElementById("tbl").innerHTML="<tr><th>Gas</th><th>Unit</th><th>Images</th><th>Count</th><th>Min</th><th>Mean</th><th>Median</th><th>Max</th><th>Std</th></tr>"+D.map(function(g){return "<tr><td>"+g[0]+"</td><td>"+g[1]+"</td><td>"+g[2]+"</td><td>"+g[3]+"</td>"+[4,5,6,7,8].map(function(j){return "<td>"+(g[j]<0.001&&g[j]>-0.001?g[j].toExponential(2):g[j].toFixed(g[1]=="ppb"?2:5))+"</td>"}).join("")+"</tr>"}).join("");
+
+        // Chart defaults matching the dark theme
+        Chart.defaults.color = '#98a1b5'; 
+        Chart.defaults.maintainAspectRatio = false;
+        
+        var acc = '#8fb0ff', warm = '#f09560';
+
+        function mk(id,type,labels,sets,opt){
+            new Chart(document.getElementById(id),{
+                type:type, data:{labels:labels, datasets:sets}, 
+                options:opt||{plugins:{legend:{display:false}}}
+            })
+        }
+
+        // Air Quality Charts
+        mk("cvc","bar",["CH₄","NO₂","SO₂","CO","O₃"],[{data:D.map(g=> +(g[8]/g[5]*100).toFixed(2)), backgroundColor:[acc,acc,warm,acc,acc]}]);
+        var lb=["Min","Mean","Max"];
+        mk("nso","bar",lb,[{label:"NO₂",data:[30,35,54],backgroundColor:acc},{label:"SO₂",data:[-31,20,66],backgroundColor:warm}],{});
+        mk("coc","bar",lb,[{data:[0.034554,0.035642,0.036441],backgroundColor:acc}],{plugins:{legend:{display:false}},scales:{y:{min:0.034}}});
+        mk("ch4c","bar",lb,[{data:[1925.12,1930.08,1935.31],backgroundColor:acc}],{plugins:{legend:{display:false}},scales:{y:{min:1920}}});
+
+        // UHI Charts
+        var hl=[-19,-18,-17,-16,-15,-14,-13,-12,-11,-10,-9,-8,-7,-6,-5,-4,-3,-2,-1,0,1,2,3,4,5,6,7,8,9];
+        var hv=[0.13,0.74,0.26,0.14,0.09,0.06,0.07,0.12,0.21,0.37,0.72,1.18,1.86,2.89,4.34,5.92,7.13,8.35,9.64,10.64,11.52,11.32,9.62,6.73,4.0,1.55,0.36,0.06,0];
+        mk("hist","bar",hl,[{data:hv,backgroundColor:hl.map(x=> x>=2?warm:acc)}]);
+        mk("cls","bar",["Cool","Neutral","Warm","Hot","Very hot"],[{data:[26.2,18.0,22.2,27.7,6.0],backgroundColor:[acc,acc,acc,warm,warm]}]);
+
+        </script>
+    </body>
+</html>
